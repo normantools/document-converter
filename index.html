@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档格式转换工具 - Word/PDF/PPT/Excel 转 Markdown/TXT/JSON</title>
+    <meta name="description" content="免费在线文档转换工具，支持 Word、PDF、PPT、Excel 转换为 Markdown、TXT、JSON 格式，浏览器本地处理，保护隐私。">
+    <meta name="keywords" content="文档转换,Word转Markdown,PDF转TXT,Excel转JSON,PPT转换,格式转换,在线转换工具">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 12px;
+            padding: 60px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9ff;
+            position: relative;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e8ebff;
+        }
+
+        .upload-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 1.2em;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .upload-hint {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .format-selector {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9ff;
+            border-radius: 8px;
+        }
+
+        .format-selector label {
+            font-weight: 500;
+            color: #333;
+            margin-right: 20px;
+        }
+
+        .format-options {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .format-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .format-option input[type="radio"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .progress {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .result-container {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .result-info {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .result-textarea {
+            width: 100%;
+            min-height: 400px;
+            padding: 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: vertical;
+        }
+
+        .result-textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+        }
+
+        .btn-success {
+            background: #10b981;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .file-info {
+            display: none;
+            background: #f0f2ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .file-info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .file-info-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .file-info-label {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .file-info-value {
+            color: #667eea;
+        }
+
+        .seo-content {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            color: #333;
+            line-height: 1.8;
+        }
+
+        .seo-content h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .seo-content p {
+            margin-bottom: 15px;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .feature-item {
+            background: #f8f9ff;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .feature-item strong {
+            color: #667eea;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .supported-formats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .format-badge {
+            background: #f8f9ff;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: 500;
+            color: #667eea;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            margin-top: 30px;
+            opacity: 0.8;
+            font-size: 0.9em;
+        }
+
+        /* Toast 提示样式 */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast.error {
+            background: #ef4444;
+        }
+
+        .toast.success {
+            background: #10b981;
+        }
+
+        .toast.warning {
+            background: #f59e0b;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .format-options {
+                flex-direction: column;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .result-header {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .toast {
+                left: 20px;
+                right: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>文档格式转换工具</h1>
+            <p class="subtitle">Word/PDF/PPT/Excel 转 Markdown/TXT/JSON - 浏览器本地处理，保护隐私</p>
+        </header>
+
+        <div class="card">
+            <div class="upload-area" id="uploadArea" role="button" tabindex="0" aria-label="点击或拖拽文档到此处上传">
+                <div class="upload-icon">📄</div>
+                <div class="upload-text">点击或拖拽文档到此处</div>
+                <div class="upload-hint">支持 Word (.docx)、PDF (.pdf)、Excel (.xlsx/.xls)、PPT (.pptx) 格式</div>
+            </div>
+            <input type="file" id="fileInput" accept=".docx,.pdf,.xlsx,.xls,.pptx" aria-label="选择文档文件">
+
+            <div class="file-info" id="fileInfo">
+                <div class="file-info-item">
+                    <span class="file-info-label">文件名：</span>
+                    <span class="file-info-value" id="fileName"></span>
+                </div>
+                <div class="file-info-item">
+                    <span class="file-info-label">文件大小：</span>
+                    <span class="file-info-value" id="fileSize"></span>
+                </div>
+                <div class="file-info-item">
+                    <span class="file-info-label">文件类型：</span>
+                    <span class="file-info-value" id="fileType"></span>
+                </div>
+            </div>
+
+            <div class="format-selector">
+                <label>选择输出格式：</label>
+                <div class="format-options">
+                    <label class="format-option">
+                        <input type="radio" name="outputFormat" value="markdown" checked>
+                        <span>Markdown (.md)</span>
+                    </label>
+                    <label class="format-option">
+                        <input type="radio" name="outputFormat" value="txt">
+                        <span>TXT (.txt)</span>
+                    </label>
+                    <label class="format-option">
+                        <input type="radio" name="outputFormat" value="json">
+                        <span>JSON (.json)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="progress" id="progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                <div id="progressText">正在转换中...</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+
+            <div class="result-container" id="resultContainer">
+                <div class="result-header">
+                    <div class="result-info">
+                        <span id="resultInfo"></span>
+                    </div>
+                </div>
+                <textarea class="result-textarea" id="resultText" readonly></textarea>
+                
+                <div class="actions">
+                    <button class="btn btn-success" id="downloadBtn">下载转换结果</button>
+                    <button class="btn" id="copyBtn">复制到剪贴板</button>
+                    <button class="btn btn-secondary" id="resetBtn">重新选择</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="seo-content">
+            <h2>为什么使用文档格式转换工具？</h2>
+            <p>在 AI 时代，将文档转换为结构化的文本格式（如 Markdown、JSON）可以显著提升 AI 模型的理解和处理能力。本工具帮助您快速将各类文档转换为 AI 友好的格式，提高工作效率。</p>
+            
+            <div class="features">
+                <div class="feature-item">
+                    <strong>完全免费</strong>
+                    无需注册，无需付费，无限次使用
+                </div>
+                <div class="feature-item">
+                    <strong>隐私安全</strong>
+                    文档在浏览器本地处理，不上传服务器
+                </div>
+                <div class="feature-item">
+                    <strong>多格式支持</strong>
+                    支持 Word、PDF、Excel、PPT 等主流格式
+                </div>
+                <div class="feature-item">
+                    <strong>AI 友好</strong>
+                    输出 Markdown、JSON 等 AI 易读格式
+                </div>
+            </div>
+
+            <h2 style="margin-top: 30px;">支持的文档格式</h2>
+            <div class="supported-formats">
+                <div class="format-badge">Word (.docx)</div>
+                <div class="format-badge">PDF (.pdf)</div>
+                <div class="format-badge">Excel (.xlsx/.xls)</div>
+                <div class="format-badge">PPT (.pptx)</div>
+            </div>
+
+            <h2 style="margin-top: 30px;">适用场景</h2>
+            <p><strong>AI 训练数据准备：</strong>将企业文档、技术手册转换为结构化格式，用于 AI 模型训练。</p>
+            <p><strong>知识库构建：</strong>将 PDF 报告、Word 文档转换为 Markdown，方便导入知识库系统。</p>
+            <p><strong>数据分析：</strong>将 Excel 表格转换为 JSON 格式，便于程序处理和 API 对接。</p>
+            <p><strong>内容迁移：</strong>将演示文稿转换为文本格式，方便内容复用和编辑。</p>
+
+            <h2 style="margin-top: 30px;">转换说明</h2>
+            <p><strong>Word 文档：</strong>保留标题层级、段落结构、列表格式，转换为 Markdown 时保留基本样式。</p>
+            <p><strong>PDF 文档：</strong>提取文本内容，保留基本段落结构。扫描版 PDF 可能无法提取文本。</p>
+            <p><strong>Excel 表格：</strong>转换为 Markdown 表格或 JSON 数组，保留数据和表头。</p>
+            <p><strong>PPT 演示文稿：</strong>提取每页幻灯片的文本内容，按页面组织输出。</p>
+        </div>
+
+        <footer>
+            <p>本工具完全在浏览器本地运行，您的文档不会上传到任何服务器</p>
+            <p style="margin-top: 10px;">© 2024 文档格式转换工具 | 免费使用</p>
+        </footer>
+    </div>
+
+    <script>
+        // 设置 PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // Toast 提示函数
+        function showToast(message, type = 'error') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideIn 0.3s ease reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const fileType = document.getElementById('fileType');
+        const progress = document.getElementById('progress');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const resultContainer = document.getElementById('resultContainer');
+        const resultText = document.getElementById('resultText');
+        const resultInfo = document.getElementById('resultInfo');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        let currentFile = null;
+        let convertedContent = '';
+        let currentOutputFormat = 'markdown';
+
+        // 点击上传区域
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        // 键盘支持
+        uploadArea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                fileInput.click();
+            }
+        });
+
+        // 拖拽上传
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        // 文件选择
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        // 处理文件
+        async function handleFile(file) {
+            currentFile = file;
+            
+            // 显示文件信息
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileType.textContent = getFileTypeLabel(file.name);
+            fileInfo.style.display = 'block';
+            
+            // 开始转换
+            await convertFile(file);
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // 获取文件类型标签
+        function getFileTypeLabel(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const types = {
+                'docx': 'Word 文档',
+                'pdf': 'PDF 文档',
+                'xlsx': 'Excel 表格',
+                'xls': 'Excel 表格',
+                'pptx': 'PowerPoint 演示文稿'
+            };
+            return types[ext] || '未知格式';
+        }
+
+        // 转换文件
+        async function convertFile(file) {
+            progress.style.display = 'block';
+            resultContainer.style.display = 'none';
+            progressFill.style.width = '0%';
+
+            const ext = file.name.split('.').pop().toLowerCase();
+            
+            try {
+                let result = '';
+                
+                if (ext === 'pdf') {
+                    progressText.textContent = '正在解析 PDF 文档...';
+                    result = await convertPDF(file);
+                } else if (ext === 'docx') {
+                    progressText.textContent = '正在解析 Word 文档...';
+                    result = await convertWord(file);
+                } else if (ext === 'xlsx' || ext === 'xls') {
+                    progressText.textContent = '正在解析 Excel 表格...';
+                    result = await convertExcel(file);
+                } else if (ext === 'pptx') {
+                    progressText.textContent = '正在解析 PowerPoint 演示文稿...';
+                    result = await convertPPT(file);
+                } else {
+                    throw new Error('不支持的文件格式');
+                }
+
+                progressFill.style.width = '100%';
+                
+                // 获取选择的输出格式
+                currentOutputFormat = document.querySelector('input[name="outputFormat"]:checked').value;
+                
+                // 根据输出格式转换
+                convertedContent = formatOutput(result, currentOutputFormat);
+                
+                // 显示结果
+                setTimeout(() => {
+                    progress.style.display = 'none';
+                    resultContainer.style.display = 'block';
+                    resultText.value = convertedContent;
+                    
+                    const charCount = convertedContent.length;
+                    const lineCount = convertedContent.split('\n').length;
+                    resultInfo.textContent = `共 ${charCount} 字符，${lineCount} 行`;
+                    
+                    showToast('转换成功！', 'success');
+                }, 300);
+                
+            } catch (error) {
+                console.error('转换失败:', error);
+                progress.style.display = 'none';
+                showToast('转换失败: ' + error.message, 'error');
+            }
+        }
+
+        // 转换 PDF
+        async function convertPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            
+            let content = {
+                title: file.name,
+                type: 'pdf',
+                pages: []
+            };
+            
+            for (let i = 1; i <= pdf.numPages; i++) {
+                progressFill.style.width = ((i / pdf.numPages) * 100) + '%';
+                progressText.textContent = `正在解析第 ${i}/${pdf.numPages} 页...`;
+                
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                
+                let pageText = '';
+                let lastY = null;
+                
+                textContent.items.forEach(item => {
+                    if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
+                        pageText += '\n';
+                    }
+                    pageText += item.str;
+                    lastY = item.transform[5];
+                });
+                
+                content.pages.push({
+                    pageNumber: i,
+                    text: pageText.trim()
+                });
+            }
+            
+            return content;
+        }
+
+        // 转换 Word
+        async function convertWord(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+            
+            let content = {
+                title: file.name,
+                type: 'word',
+                html: result.value,
+                messages: result.messages
+            };
+            
+            progressFill.style.width = '100%';
+            
+            return content;
+        }
+
+        // 转换 Excel
+        async function convertExcel(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+            
+            let content = {
+                title: file.name,
+                type: 'excel',
+                sheets: []
+            };
+            
+            workbook.SheetNames.forEach((sheetName, index) => {
+                progressFill.style.width = ((index + 1) / workbook.SheetNames.length) * 100 + '%';
+                progressText.textContent = `正在解析工作表: ${sheetName}...`;
+                
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                
+                content.sheets.push({
+                    name: sheetName,
+                    data: jsonData
+                });
+            });
+            
+            return content;
+        }
+
+        // 转换 PPT
+        async function convertPPT(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const zip = await JSZip.loadAsync(arrayBuffer);
+            
+            let content = {
+                title: file.name,
+                type: 'ppt',
+                slides: []
+            };
+            
+            // 获取幻灯片数量
+            const slideFiles = Object.keys(zip.files)
+                .filter(name => name.match(/ppt\/slides\/slide\d+\.xml$/))
+                .sort();
+            
+            for (let i = 0; i < slideFiles.length; i++) {
+                progressFill.style.width = ((i + 1) / slideFiles.length) * 100 + '%';
+                progressText.textContent = `正在解析第 ${i + 1}/${slideFiles.length} 张幻灯片...`;
+                
+                const slideFile = slideFiles[i];
+                const slideContent = await zip.file(slideFile).async('text');
+                
+                // 简单提取文本内容
+                const textMatches = slideContent.match(/<a:t>([^<]*)<\/a:t>/g);
+                const texts = textMatches ? textMatches.map(match => 
+                    match.replace(/<a:t>|<\/a:t>/g, '')
+                ) : [];
+                
+                content.slides.push({
+                    slideNumber: i + 1,
+                    text: texts.join('\n')
+                });
+            }
+            
+            return content;
+        }
+
+        // 格式化输出
+        function formatOutput(content, format) {
+            switch (format) {
+                case 'markdown':
+                    return toMarkdown(content);
+                case 'txt':
+                    return toTxt(content);
+                case 'json':
+                    return JSON.stringify(content, null, 2);
+                default:
+                    return toMarkdown(content);
+            }
+        }
+
+        // 转换为 Markdown
+        function toMarkdown(content) {
+            let markdown = '';
+            
+            if (content.type === 'pdf') {
+                markdown += `# ${content.title}\n\n`;
+                content.pages.forEach(page => {
+                    markdown += `## 第 ${page.pageNumber} 页\n\n`;
+                    markdown += page.text + '\n\n';
+                });
+            } else if (content.type === 'word') {
+                markdown += `# ${content.title}\n\n`;
+                // 简单的 HTML 到 Markdown 转换
+                let html = content.html;
+                html = html.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n');
+                html = html.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n');
+                html = html.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n');
+                html = html.replace(/<h4[^>]*>(.*?)<\/h4>/gi, '#### $1\n\n');
+                html = html.replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n');
+                html = html.replace(/<br\s*\/?>/gi, '\n');
+                html = html.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**');
+                html = html.replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**');
+                html = html.replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*');
+                html = html.replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*');
+                html = html.replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n');
+                html = html.replace(/<[^>]+>/g, '');
+                markdown += html;
+            } else if (content.type === 'excel') {
+                markdown += `# ${content.title}\n\n`;
+                content.sheets.forEach(sheet => {
+                    markdown += `## 工作表: ${sheet.name}\n\n`;
+                    if (sheet.data.length > 0) {
+                        // 创建 Markdown 表格
+                        const headers = sheet.data[0] || [];
+                        markdown += '| ' + headers.join(' | ') + ' |\n';
+                        markdown += '| ' + headers.map(() => '---').join(' | ') + ' |\n';
+                        
+                        sheet.data.slice(1).forEach(row => {
+                            markdown += '| ' + row.map(cell => cell || '').join(' | ') + ' |\n';
+                        });
+                        markdown += '\n';
+                    }
+                });
+            } else if (content.type === 'ppt') {
+                markdown += `# ${content.title}\n\n`;
+                content.slides.forEach(slide => {
+                    markdown += `## 幻灯片 ${slide.slideNumber}\n\n`;
+                    markdown += slide.text + '\n\n';
+                });
+            }
+            
+            return markdown.trim();
+        }
+
+        // 转换为纯文本
+        function toTxt(content) {
+            let txt = '';
+            
+            if (content.type === 'pdf') {
+                txt += `${content.title}\n\n`;
+                content.pages.forEach(page => {
+                    txt += `--- 第 ${page.pageNumber} 页 ---\n\n`;
+                    txt += page.text + '\n\n';
+                });
+            } else if (content.type === 'word') {
+                txt += `${content.title}\n\n`;
+                let html = content.html;
+                html = html.replace(/<br\s*\/?>/gi, '\n');
+                html = html.replace(/<\/p>/gi, '\n\n');
+                html = html.replace(/<\/h[1-6]>/gi, '\n\n');
+                html = html.replace(/<[^>]+>/g, '');
+                txt += html;
+            } else if (content.type === 'excel') {
+                txt += `${content.title}\n\n`;
+                content.sheets.forEach(sheet => {
+                    txt += `=== 工作表: ${sheet.name} ===\n\n`;
+                    sheet.data.forEach(row => {
+                        txt += row.map(cell => cell || '').join('\t') + '\n';
+                    });
+                    txt += '\n';
+                });
+            } else if (content.type === 'ppt') {
+                txt += `${content.title}\n\n`;
+                content.slides.forEach(slide => {
+                    txt += `--- 幻灯片 ${slide.slideNumber} ---\n\n`;
+                    txt += slide.text + '\n\n';
+                });
+            }
+            
+            return txt.trim();
+        }
+
+        // 下载转换结果
+        downloadBtn.addEventListener('click', () => {
+            if (!convertedContent || !currentFile) return;
+            
+            const ext = currentOutputFormat === 'markdown' ? 'md' : currentOutputFormat;
+            const filename = currentFile.name.replace(/\.[^/.]+$/, '') + '.' + ext;
+            
+            const blob = new Blob([convertedContent], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(url);
+            
+            showToast('下载成功！', 'success');
+        });
+
+        // 复制到剪贴板
+        copyBtn.addEventListener('click', async () => {
+            if (!convertedContent) return;
+            
+            try {
+                await navigator.clipboard.writeText(convertedContent);
+                showToast('已复制到剪贴板！', 'success');
+            } catch (error) {
+                // 降级方案
+                resultText.select();
+                document.execCommand('copy');
+                showToast('已复制到剪贴板！', 'success');
+            }
+        });
+
+        // 重置
+        resetBtn.addEventListener('click', () => {
+            fileInput.value = '';
+            fileInfo.style.display = 'none';
+            resultContainer.style.display = 'none';
+            progress.style.display = 'none';
+            currentFile = null;
+            convertedContent = '';
+        });
+
+        // 监听输出格式变化
+        document.querySelectorAll('input[name="outputFormat"]').forEach(radio => {
+            radio.addEventListener('change', async (e) => {
+                if (currentFile && convertedContent) {
+                    // 重新转换
+                    const ext = currentFile.name.split('.').pop().toLowerCase();
+                    let result = '';
+                    
+                    if (ext === 'pdf') {
+                        result = await convertPDF(currentFile);
+                    } else if (ext === 'docx') {
+                        result = await convertWord(currentFile);
+                    } else if (ext === 'xlsx' || ext === 'xls') {
+                        result = await convertExcel(currentFile);
+                    } else if (ext === 'pptx') {
+                        result = await convertPPT(currentFile);
+                    }
+                    
+                    currentOutputFormat = e.target.value;
+                    convertedContent = formatOutput(result, currentOutputFormat);
+                    resultText.value = convertedContent;
+                    
+                    const charCount = convertedContent.length;
+                    const lineCount = convertedContent.split('\n').length;
+                    resultInfo.textContent = `共 ${charCount} 字符，${lineCount} 行`;
+                }
+            });
+        });
+    </script>
+    
+    <!-- JSZip 用于解析 PPT -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</body>
+</html>
