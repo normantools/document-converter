@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word 表格调试工具</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #667eea;
+        }
+        textarea {
+            width: 100%;
+            min-height: 300px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            opacity: 0.9;
+        }
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .upload-area:hover {
+            background: #f0f2ff;
+        }
+        #fileInput {
+            display: none;
+        }
+        .preview {
+            background: #f8f9ff;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <h1>Word 表格调试工具</h1>
+    <p>用于分析 mammoth.js 生成的 HTML 结构，优化表格转换逻辑</p>
+
+    <div class="card">
+        <div class="upload-area" id="uploadArea">
+            <div style="font-size: 48px;">📄</div>
+            <div>点击或拖拽 Word 文档到此处</div>
+        </div>
+        <input type="file" id="fileInput" accept=".docx">
+    </div>
+
+    <div class="card">
+        <h2>原始 HTML 输出</h2>
+        <textarea id="htmlOutput" readonly placeholder="上传文档后将显示 mammoth 生成的原始 HTML..."></textarea>
+        <button class="btn" onclick="copyHtml()">复制 HTML</button>
+    </div>
+
+    <div class="card">
+        <h2>HTML 预览</h2>
+        <div class="preview" id="htmlPreview">上传文档后将显示 HTML 预览...</div>
+    </div>
+
+    <div class="card">
+        <h2>表格分析</h2>
+        <div id="tableAnalysis">上传文档后将分析表格结构...</div>
+    </div>
+
+    <div class="card">
+        <h2>转换后的 Markdown</h2>
+        <textarea id="markdownOutput" readonly placeholder="转换后的 Markdown 将显示在这里..."></textarea>
+        <button class="btn" onclick="copyMarkdown()">复制 Markdown</button>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const htmlOutput = document.getElementById('htmlOutput');
+        const htmlPreview = document.getElementById('htmlPreview');
+        const tableAnalysis = document.getElementById('tableAnalysis');
+        const markdownOutput = document.getElementById('markdownOutput');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.background = '#e8ebff';
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.background = '';
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.background = '';
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        async function handleFile(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+            
+            // 显示原始 HTML
+            htmlOutput.value = result.value;
+            
+            // 显示 HTML 预览
+            htmlPreview.innerHTML = result.value;
+            
+            // 分析表格
+            analyzeTables(result.value);
+            
+            // 转换为 Markdown
+            const markdown = convertToMarkdown(result.value);
+            markdownOutput.value = markdown;
+        }
+
+        function analyzeTables(html) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const tables = doc.querySelectorAll('table');
+            
+            let analysis = `<h3>找到 ${tables.length} 个表格</h3>`;
+            
+            tables.forEach((table, index) => {
+                const rows = table.querySelectorAll('tr');
+                analysis += `<h4>表格 ${index + 1}</h4>`;
+                analysis += `<p>行数: ${rows.length}</p>`;
+                
+                rows.forEach((row, rowIndex) => {
+                    const cells = row.querySelectorAll('td, th');
+                    analysis += `<p style="margin-left: 20px;">第 ${rowIndex + 1} 行: ${cells.length} 个单元格 - [`;
+                    cells.forEach((cell, cellIndex) => {
+                        analysis += `"${cell.textContent.trim()}"`;
+                        if (cellIndex < cells.length - 1) analysis += ', ';
+                    });
+                    analysis += ']</p>';
+                });
+            });
+            
+            tableAnalysis.innerHTML = analysis;
+        }
+
+        function convertToMarkdown(html) {
+            let markdown = '';
+            
+            // 匹配所有表格
+            const tableRegex = /<table[^>]*>([\s\S]*?)<\/table>/gi;
+            let match;
+            
+            while ((match = tableRegex.exec(html)) !== null) {
+                const tableContent = match[1];
+                
+                // 提取所有行
+                const rows = [];
+                const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+                let rowMatch;
+                
+                while ((rowMatch = rowRegex.exec(tableContent)) !== null) {
+                    const rowContent = rowMatch[1];
+                    const cells = [];
+                    
+                    // 提取单元格（支持 th 和 td）
+                    const cellRegex = /<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi;
+                    let cellMatch;
+                    
+                    while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+                        let cellText = cellMatch[1];
+                        // 清理单元格内的 HTML 标签
+                        cellText = cellText.replace(/<br\s*\/?>/gi, ' ');
+                        cellText = cellText.replace(/<[^>]+>/g, '');
+                        cellText = cellText.trim();
+                        // 转义 Markdown 表格中的特殊字符
+                        cellText = cellText.replace(/\|/g, '\\|');
+                        cells.push(cellText);
+                    }
+                    
+                    if (cells.length > 0) {
+                        rows.push(cells);
+                    }
+                }
+                
+                // 转换为 Markdown 表格
+                if (rows.length > 0) {
+                    // 第一行作为表头
+                    const headerRow = rows[0];
+                    markdown += '| ' + headerRow.join(' | ') + ' |\n';
+                    markdown += '| ' + headerRow.map(() => '---').join(' | ') + ' |\n';
+                    
+                    // 数据行
+                    for (let i = 1; i < rows.length; i++) {
+                        const row = rows[i];
+                        // 确保列数一致
+                        while (row.length < headerRow.length) {
+                            row.push('');
+                        }
+                        markdown += '| ' + row.slice(0, headerRow.length).join(' | ') + ' |\n';
+                    }
+                    markdown += '\n';
+                }
+            }
+            
+            // 移除已处理的表格
+            html = html.replace(/<table[^>]*>[\s\S]*?<\/table>/gi, '');
+            
+            // 处理其他元素
+            html = html.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n');
+            html = html.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n');
+            html = html.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n');
+            html = html.replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n');
+            html = html.replace(/<br\s*\/?>/gi, '\n');
+            html = html.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**');
+            html = html.replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**');
+            html = html.replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*');
+            html = html.replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*');
+            html = html.replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n');
+            html = html.replace(/<[^>]+>/g, '');
+            
+            markdown += html;
+            
+            return markdown.trim();
+        }
+
+        function copyHtml() {
+            htmlOutput.select();
+            document.execCommand('copy');
+            alert('HTML 已复制到剪贴板！');
+        }
+
+        function copyMarkdown() {
+            markdownOutput.select();
+            document.execCommand('copy');
+            alert('Markdown 已复制到剪贴板！');
+        }
+    </script>
+</body>
+</html>

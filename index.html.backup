@@ -10,7 +10,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -302,41 +301,6 @@
             color: #667eea;
         }
 
-        .ocr-status {
-            display: none;
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 15px 0;
-        }
-
-        .ocr-status.active {
-            display: block;
-        }
-
-        .ocr-progress {
-            width: 100%;
-            height: 20px;
-            background: #e5e7eb;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-top: 10px;
-        }
-
-        .ocr-progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            width: 0%;
-            transition: width 0.3s;
-        }
-
-        .ocr-info {
-            font-size: 0.9em;
-            color: #666;
-            margin-top: 8px;
-        }
-
         footer {
             text-align: center;
             color: white;
@@ -422,17 +386,9 @@
             <div class="upload-area" id="uploadArea" role="button" tabindex="0" aria-label="点击或拖拽文档到此处上传">
                 <div class="upload-icon">📄</div>
                 <div class="upload-text">点击或拖拽文档到此处</div>
-                <div class="upload-hint">支持 Word (.docx/.rtf/.odt)、PDF (.pdf)、Excel (.xlsx/.xls/.csv)、PPT (.pptx)、TXT (.txt) 格式，可批量上传多个文件</div>
+                <div class="upload-hint">支持 Word (.docx)、PDF (.pdf)、Excel (.xlsx/.xls)、PPT (.pptx) 格式</div>
             </div>
-            <input type="file" id="fileInput" accept=".docx,.rtf,.odt,.pdf,.xlsx,.xls,.csv,.pptx,.txt" multiple aria-label="选择文档文件">
-
-            <div class="batch-files" id="batchFiles" style="display: none; margin-top: 20px; padding: 15px; background: #f8f9ff; border-radius: 8px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="font-size: 1.1em; color: #333;">待处理文件 (<span id="fileCount">0</span>)</h3>
-                    <button class="btn btn-secondary" onclick="clearFiles()" style="padding: 8px 16px; font-size: 0.9em;">清空列表</button>
-                </div>
-                <div id="fileList" style="max-height: 300px; overflow-y: auto;"></div>
-            </div>
+            <input type="file" id="fileInput" accept=".docx,.pdf,.xlsx,.xls,.pptx" aria-label="选择文档文件">
 
             <div class="file-info" id="fileInfo">
                 <div class="file-info-item">
@@ -467,54 +423,11 @@
                 </div>
             </div>
 
-            <div class="ocr-settings" id="ocrSettings" style="display: none;">
-                <label style="font-weight: 500; color: #333; display: block; margin-bottom: 10px;">OCR 设置：</label>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                    <div>
-                        <label style="font-size: 0.9em; color: #666;">识别语言：</label>
-                        <select id="ocrLanguage" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-top: 5px;">
-                            <option value="chi_sim+eng" selected>中文简体 + 英文</option>
-                            <option value="chi_tra+eng">中文繁体 + 英文</option>
-                            <option value="eng">仅英文</option>
-                            <option value="chi_sim">仅中文简体</option>
-                            <option value="jpn+eng">日文 + 英文</option>
-                            <option value="kor+eng">韩文 + 英文</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label style="font-size: 0.9em; color: #666;">图像增强：</label>
-                        <select id="ocrEnhance" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-top: 5px;">
-                            <option value="auto" selected>自动（推荐）</option>
-                            <option value="high">高对比度</option>
-                            <option value="denoise">去噪处理</option>
-                            <option value="binary">二值化</option>
-                            <option value="none">无处理</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label style="font-size: 0.9em; color: #666;">识别精度：</label>
-                        <select id="ocrQuality" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-top: 5px;">
-                            <option value="fast">快速模式</option>
-                            <option value="balanced" selected>平衡模式（推荐）</option>
-                            <option value="accurate">高精度模式</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
             <div class="progress" id="progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                 <div id="progressText">正在转换中...</div>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill"></div>
                 </div>
-            </div>
-
-            <div class="ocr-status" id="ocrStatus">
-                <div><strong>🔍 OCR 识别中...</strong></div>
-                <div class="ocr-progress">
-                    <div class="ocr-progress-fill" id="ocrProgressFill"></div>
-                </div>
-                <div class="ocr-info" id="ocrInfo">正在初始化 OCR 引擎...</div>
             </div>
 
             <div class="result-container" id="resultContainer">
@@ -528,7 +441,6 @@
                 <div class="actions">
                     <button class="btn btn-success" id="downloadBtn">下载转换结果</button>
                     <button class="btn" id="copyBtn">复制到剪贴板</button>
-                    <button class="btn" id="batchConvertBtn" style="display: none; background: #8b5cf6;">批量转换全部</button>
                     <button class="btn btn-secondary" id="resetBtn">重新选择</button>
                 </div>
             </div>
@@ -573,7 +485,7 @@
 
             <h2 style="margin-top: 30px;">转换说明</h2>
             <p><strong>Word 文档：</strong>保留标题层级、段落结构、列表格式，转换为 Markdown 时保留基本样式。</p>
-            <p><strong>PDF 文档：</strong>自动检测文本型或扫描版 PDF。扫描版 PDF 会启用 OCR 识别（支持中英文），提取图片中的文字。</p>
+            <p><strong>PDF 文档：</strong>提取文本内容，保留基本段落结构。扫描版 PDF 可能无法提取文本。</p>
             <p><strong>Excel 表格：</strong>转换为 Markdown 表格或 JSON 数组，保留数据和表头。</p>
             <p><strong>PPT 演示文稿：</strong>提取每页幻灯片的文本内容，按页面组织输出。</p>
         </div>
@@ -620,8 +532,6 @@
         let currentFile = null;
         let convertedContent = '';
         let currentOutputFormat = 'markdown';
-        let batchFiles = [];
-        let batchResults = [];
 
         // 点击上传区域
         uploadArea.addEventListener('click', () => fileInput.click());
@@ -649,7 +559,7 @@
             uploadArea.classList.remove('dragover');
             const files = Array.from(e.dataTransfer.files);
             if (files.length > 0) {
-                addFilesToBatch(files);
+                handleFile(files[0]);
             }
         });
 
@@ -657,77 +567,9 @@
         fileInput.addEventListener('change', (e) => {
             const files = Array.from(e.target.files);
             if (files.length > 0) {
-                addFilesToBatch(files);
+                handleFile(files[0]);
             }
-            fileInput.value = '';
         });
-
-        // 添加文件到批量列表
-        function addFilesToBatch(files) {
-            const validFiles = files.filter(file => {
-                const ext = file.name.split('.').pop().toLowerCase();
-                return ['docx', 'pdf', 'xlsx', 'xls', 'pptx'].includes(ext);
-            });
-            
-            if (validFiles.length === 0) {
-                showToast('请选择有效的文档文件', 'error');
-                return;
-            }
-            
-            batchFiles = [...batchFiles, ...validFiles];
-            updateBatchFileList();
-            
-            if (batchFiles.length === 1) {
-                handleFile(batchFiles[0]);
-            } else {
-                showToast(`已添加 ${validFiles.length} 个文件到批量列表`, 'success');
-            }
-        }
-
-        // 更新批量文件列表显示
-        function updateBatchFileList() {
-            const batchFilesDiv = document.getElementById('batchFiles');
-            const fileListDiv = document.getElementById('fileList');
-            const fileCountSpan = document.getElementById('fileCount');
-            
-            if (batchFiles.length === 0) {
-                batchFilesDiv.style.display = 'none';
-                return;
-            }
-            
-            batchFilesDiv.style.display = 'block';
-            fileCountSpan.textContent = batchFiles.length;
-            
-            fileListDiv.innerHTML = batchFiles.map((file, index) => `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; margin-bottom: 8px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
-                    <div>
-                        <div style="font-weight: 500; color: #333;">${file.name}</div>
-                        <div style="font-size: 0.85em; color: #666;">${formatFileSize(file.size)} - ${getFileTypeLabel(file.name)}</div>
-                    </div>
-                    <button onclick="removeFileFromBatch(${index})" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85em;">移除</button>
-                </div>
-            `).join('');
-            updateBatchConvertButton();
-        }
-        }
-
-        // 从批量列表移除文件
-        function removeFileFromBatch(index) {
-            batchFiles.splice(index, 1);
-            updateBatchFileList();
-            updateBatchConvertButton();
-        }
-
-        // 清空批量列表
-        function clearFiles() {
-            batchFiles = [];
-            batchResults = [];
-            updateBatchFileList();
-            updateBatchConvertButton();
-            resultContainer.style.display = 'none';
-            fileInfo.style.display = 'none';
-        }
-        }
 
         // 处理文件
         async function handleFile(file) {
@@ -767,24 +609,11 @@
 
         // 转换文件
         async function convertFile(file) {
-            // 检查文件大小（限制 100MB）
-            const maxSize = 100 * 1024 * 1024;
-            if (file.size > maxSize) {
-                showToast('文件过大，请选择小于 100MB 的文件', 'error');
-                progress.style.display = 'none';
-                return;
-            }
-            
             progress.style.display = 'block';
             resultContainer.style.display = 'none';
             progressFill.style.width = '0%';
 
             const ext = file.name.split('.').pop().toLowerCase();
-            
-            // 显示文件大小提示
-            if (file.size > 10 * 1024 * 1024) {
-                showToast('文件较大，处理可能需要较长时间...', 'warning');
-            }
             
             try {
                 let result = '';
@@ -833,43 +662,6 @@
             }
         }
 
-        // 图像预处理函数
-        function preprocessImage(canvas, enhanceMode) {
-            const ctx = canvas.getContext('2d');
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-            
-            if (enhanceMode === 'high') {
-                for (let i = 0; i < data.length; i += 4) {
-                    const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                    const contrast = avg < 128 ? avg * 0.7 : 128 + (avg - 128) * 1.3;
-                    data[i] = data[i + 1] = data[i + 2] = Math.min(255, Math.max(0, contrast));
-                }
-            } else if (enhanceMode === 'binary') {
-                for (let i = 0; i < data.length; i += 4) {
-                    const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                    const binary = avg < 128 ? 0 : 255;
-                    data[i] = data[i + 1] = data[i + 2] = binary;
-                }
-            } else if (enhanceMode === 'auto') {
-                let min = 255, max = 0;
-                for (let i = 0; i < data.length; i += 4) {
-                    const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                    if (avg < min) min = avg;
-                    if (avg > max) max = avg;
-                }
-                const range = max - min || 1;
-                for (let i = 0; i < data.length; i += 4) {
-                    const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                    const normalized = ((avg - min) / range) * 255;
-                    data[i] = data[i + 1] = data[i + 2] = normalized;
-                }
-            }
-            
-            ctx.putImageData(imageData, 0, 0);
-            return canvas;
-        }
-
         // 转换 PDF
         async function convertPDF(file) {
             const arrayBuffer = await file.arrayBuffer();
@@ -878,13 +670,13 @@
             let content = {
                 title: file.name,
                 type: 'pdf',
-                pages: [],
-                isScanned: false
+                pages: []
             };
             
-            // 先尝试提取文本
-            let hasText = false;
             for (let i = 1; i <= pdf.numPages; i++) {
+                progressFill.style.width = ((i / pdf.numPages) * 100) + '%';
+                progressText.textContent = `正在解析第 ${i}/${pdf.numPages} 页...`;
+                
                 const page = await pdf.getPage(i);
                 const textContent = await page.getTextContent();
                 
@@ -899,95 +691,10 @@
                     lastY = item.transform[5];
                 });
                 
-                if (pageText.trim().length > 50) {
-                    hasText = true;
-                }
-                
                 content.pages.push({
                     pageNumber: i,
                     text: pageText.trim()
                 });
-            }
-            
-            // 如果没有提取到足够文本，使用 OCR
-            if (!hasText) {
-                content.isScanned = true;
-                
-                // 显示 OCR 设置
-                document.getElementById('ocrSettings').style.display = 'block';
-                
-                showToast('检测到扫描版 PDF，正在启用 OCR 识别...', 'warning');
-                
-                // 显示 OCR 状态
-                const ocrStatus = document.getElementById('ocrStatus');
-                const ocrProgressFill = document.getElementById('ocrProgressFill');
-                const ocrInfo = document.getElementById('ocrInfo');
-                ocrStatus.classList.add('active');
-                
-                // 获取 OCR 配置
-                const ocrLanguage = document.getElementById('ocrLanguage').value;
-                const ocrEnhance = document.getElementById('ocrEnhance').value;
-                const ocrQuality = document.getElementById('ocrQuality').value;
-                
-                // 根据质量模式调整参数
-                let scale = 2;
-                if (ocrQuality === 'fast') {
-                    scale = 1.5;
-                } else if (ocrQuality === 'accurate') {
-                    scale = 3;
-                }
-                
-                // 初始化 OCR
-                const worker = await Tesseract.createWorker(ocrLanguage, 1, {
-                    logger: m => {
-                        if (m.status === 'recognizing text') {
-                            const percent = Math.round(m.progress * 100);
-                            ocrProgressFill.style.width = percent + '%';
-                            ocrInfo.textContent = `正在识别文本... ${percent}%`;
-                        } else if (m.status === 'loading language traineddata') {
-                            ocrInfo.textContent = '正在加载语言包...';
-                        } else if (m.status === 'initializing api') {
-                            ocrInfo.textContent = '正在初始化 OCR 引擎...';
-                        }
-                    }
-                });
-                
-                // 对每一页进行 OCR
-                for (let i = 0; i < content.pages.length; i++) {
-                    ocrInfo.textContent = `正在处理第 ${i + 1}/${pdf.numPages} 页...`;
-                    ocrProgressFill.style.width = ((i + 1) / pdf.numPages * 100) + '%';
-                    
-                    const page = await pdf.getPage(i + 1);
-                    const scale = 2; // 提高分辨率以获得更好的 OCR 效果
-                    const viewport = page.getViewport({ scale: scale });
-                    
-                    // 创建 canvas 渲染页面
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-                    
-                    await page.render({
-                        canvasContext: context,
-                        viewport: viewport
-                    }).promise;
-                    
-                    // 进行 OCR
-                    const { data: { text } } = await worker.recognize(canvas);
-                    content.pages[i].text = text.trim();
-                    
-                    // 清理 canvas 内存
-                    canvas.width = 0;
-                    canvas.height = 0;
-                }
-                }
-                
-                // 终止 worker
-                await worker.terminate();
-                
-                // 隐藏 OCR 状态
-                ocrStatus.classList.remove('active');
-                showToast('OCR 识别完成！', 'success');
             }
             
             return content;
@@ -1089,74 +796,65 @@
             }
         }
 
-        // 转换 HTML 表格为 Markdown 表格（支持合并单元格）
+        // 转换 HTML 表格为 Markdown 表格
         function convertHtmlTables(html) {
             let result = '';
             
-            // 使用 DOMParser 解析 HTML
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const tables = doc.querySelectorAll('table');
+            // 匹配所有表格
+            const tableRegex = /<table[^>]*>([\s\S]*?)<\/table>/gi;
+            let match;
             
-            tables.forEach((table) => {
-                const rows = table.querySelectorAll('tr');
-                const matrix = []; // 表格矩阵，用于处理合并单元格
+            while ((match = tableRegex.exec(html)) !== null) {
+                const tableContent = match[1];
                 
-                // 构建表格矩阵
-                rows.forEach((row, rowIndex) => {
-                    if (!matrix[rowIndex]) matrix[rowIndex] = [];
-                    
-                    const cells = row.querySelectorAll('td, th');
-                    let colIndex = 0;
-                    
-                    cells.forEach((cell) => {
-                        // 跳过已被占用的单元格
-                        while (matrix[rowIndex][colIndex]) {
-                            colIndex++;
-                        }
-                        
-                        // 获取单元格文本
-                        let cellText = cell.textContent.trim();
-                        cellText = cellText.replace(/\n+/g, ' ');
-                        cellText = cellText.replace(/\|/g, '\|');
-                        
-                        // 获取合并信息
-                        const rowspan = parseInt(cell.getAttribute('rowspan')) || 1;
-                        const colspan = parseInt(cell.getAttribute('colspan')) || 1;
-                        
-                        // 填充矩阵
-                        for (let i = 0; i < rowspan; i++) {
-                            for (let j = 0; j < colspan; j++) {
-                                if (!matrix[rowIndex + i]) matrix[rowIndex + i] = [];
-                                matrix[rowIndex + i][colIndex + j] = cellText;
-                            }
-                        }
-                        
-                        colIndex += colspan;
-                    });
-                });
+                // 提取所有行
+                const rows = [];
+                const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+                let rowMatch;
                 
-                // 转换为 Markdown 表格
-                if (matrix.length > 0) {
-                    // 计算最大列数
-                    const maxCols = Math.max(...matrix.map(row => row.length));
+                while ((rowMatch = rowRegex.exec(tableContent)) !== null) {
+                    const rowContent = rowMatch[1];
+                    const cells = [];
                     
-                    // 表头
-                    if (matrix[0]) {
-                        while (matrix[0].length < maxCols) matrix[0].push('');
-                        result += '| ' + matrix[0].join(' | ') + ' |\n';
-                        result += '| ' + matrix[0].map(() => '---').join(' | ') + ' |\n';
+                    // 提取单元格（支持 th 和 td）
+                    const cellRegex = /<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi;
+                    let cellMatch;
+                    
+                    while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+                        let cellText = cellMatch[1];
+                        // 清理单元格内的 HTML 标签
+                        cellText = cellText.replace(/<br\s*\/?>/gi, ' ');
+                        cellText = cellText.replace(/<[^>]+>/g, '');
+                        cellText = cellText.trim();
+                        // 转义 Markdown 表格中的特殊字符
+                        cellText = cellText.replace(/\|/g, '\\|');
+                        cells.push(cellText);
                     }
                     
+                    if (cells.length > 0) {
+                        rows.push(cells);
+                    }
+                }
+                
+                // 转换为 Markdown 表格
+                if (rows.length > 0) {
+                    // 第一行作为表头
+                    const headerRow = rows[0];
+                    result += '| ' + headerRow.join(' | ') + ' |\n';
+                    result += '| ' + headerRow.map(() => '---').join(' | ') + ' |\n';
+                    
                     // 数据行
-                    for (let i = 1; i < matrix.length; i++) {
-                        if (!matrix[i]) matrix[i] = [];
-                        while (matrix[i].length < maxCols) matrix[i].push('');
-                        result += '| ' + matrix[i].join(' | ') + ' |\n';
+                    for (let i = 1; i < rows.length; i++) {
+                        const row = rows[i];
+                        // 确保列数一致
+                        while (row.length < headerRow.length) {
+                            row.push('');
+                        }
+                        result += '| ' + row.slice(0, headerRow.length).join(' | ') + ' |\n';
                     }
                     result += '\n';
                 }
-            });
+            }
             
             return result;
         }
@@ -1216,9 +914,6 @@
             
             if (content.type === 'pdf') {
                 markdown += `# ${content.title}\n\n`;
-                if (content.isScanned) {
-                    markdown += `> 📝 此 PDF 为扫描版，已通过 OCR 识别提取文字\n\n`;
-                }
                 content.pages.forEach(page => {
                     markdown += `## 第 ${page.pageNumber} 页\n\n`;
                     markdown += page.text + '\n\n';
@@ -1281,9 +976,6 @@
             
             if (content.type === 'pdf') {
                 txt += `${content.title}\n\n`;
-                if (content.isScanned) {
-                    txt += `[此 PDF 为扫描版，已通过 OCR 识别提取文字]\n\n`;
-                }
                 content.pages.forEach(page => {
                     txt += `--- 第 ${page.pageNumber} 页 ---\n\n`;
                     txt += page.text + '\n\n';
@@ -1356,109 +1048,6 @@
                 showToast('已复制到剪贴板！', 'success');
             }
         });
-
-        // 批量转换
-        const batchConvertBtn = document.getElementById('batchConvertBtn');
-        
-        batchConvertBtn.addEventListener('click', async () => {
-            if (batchFiles.length === 0) return;
-            
-            batchConvertBtn.disabled = true;
-            batchConvertBtn.textContent = '批量转换中...';
-            batchResults = [];
-            
-            for (let i = 0; i < batchFiles.length; i++) {
-                const file = batchFiles[i];
-                progressText.textContent = `正在转换 ${i + 1}/${batchFiles.length}: ${file.name}`;
-                progressFill.style.width = ((i + 1) / batchFiles.length * 100) + '%';
-                
-                try {
-                    const ext = file.name.split('.').pop().toLowerCase();
-                    let result = '';
-                    
-                    if (ext === 'pdf') {
-                        result = await convertPDF(file);
-                    } else if (ext === 'docx') {
-                        result = await convertWord(file);
-                    } else if (ext === 'xlsx' || ext === 'xls') {
-                        result = await convertExcel(file);
-                    } else if (ext === 'pptx') {
-                        result = await convertPPT(file);
-                    }
-                    
-                    const output = formatOutput(result, currentOutputFormat);
-                    batchResults.push({
-                        filename: file.name,
-                        content: output,
-                        success: true
-                    });
-                } catch (error) {
-                    batchResults.push({
-                        filename: file.name,
-                        content: '',
-                        success: false,
-                        error: error.message
-                    });
-                }
-            }
-            
-            // 下载所有结果
-            if (batchResults.length > 0) {
-                downloadBatchResults();
-            }
-            
-            batchConvertBtn.disabled = false;
-            batchConvertBtn.textContent = '批量转换全部';
-            showToast(`批量转换完成！成功 ${batchResults.filter(r => r.success).length}/${batchResults.length}`, 'success');
-        });
-
-        // 下载批量转换结果
-        function downloadBatchResults() {
-            const successful = batchResults.filter(r => r.success);
-            
-            if (successful.length === 1) {
-                // 单个文件直接下载
-                const result = successful[0];
-                const ext = currentOutputFormat === 'markdown' ? 'md' : currentOutputFormat;
-                const filename = result.filename.replace(/\.[^/.]+$/, '') + '.' + ext;
-                
-                const blob = new Blob([result.content], { type: 'text/plain;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = filename;
-                link.click();
-                URL.revokeObjectURL(url);
-            } else if (successful.length > 1) {
-                // 多个文件打包为 ZIP
-                const zip = new JSZip();
-                const ext = currentOutputFormat === 'markdown' ? 'md' : currentOutputFormat;
-                
-                successful.forEach(result => {
-                    const filename = result.filename.replace(/\.[^/.]+$/, '') + '.' + ext;
-                    zip.file(filename, result.content);
-                });
-                
-                zip.generateAsync({ type: 'blob' }).then(content => {
-                    const url = URL.createObjectURL(content);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = `批量转换结果_${new Date().toISOString().slice(0,10)}.zip`;
-                    link.click();
-                    URL.revokeObjectURL(url);
-                });
-            }
-        }
-
-        // 更新批量转换按钮显示状态
-        function updateBatchConvertButton() {
-            const batchConvertBtn = document.getElementById('batchConvertBtn');
-            if (batchFiles.length > 1) {
-                batchConvertBtn.style.display = 'inline-block';
-            } else {
-                batchConvertBtn.style.display = 'none';
-            }
-        }
 
         // 重置
         resetBtn.addEventListener('click', () => {
