@@ -10,6 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -301,6 +302,41 @@
             color: #667eea;
         }
 
+        .ocr-status {
+            display: none;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .ocr-status.active {
+            display: block;
+        }
+
+        .ocr-progress {
+            width: 100%;
+            height: 20px;
+            background: #e5e7eb;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .ocr-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .ocr-info {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 8px;
+        }
+
         footer {
             text-align: center;
             color: white;
@@ -430,6 +466,14 @@
                 </div>
             </div>
 
+            <div class="ocr-status" id="ocrStatus">
+                <div><strong>🔍 OCR 识别中...</strong></div>
+                <div class="ocr-progress">
+                    <div class="ocr-progress-fill" id="ocrProgressFill"></div>
+                </div>
+                <div class="ocr-info" id="ocrInfo">正在初始化 OCR 引擎...</div>
+            </div>
+
             <div class="result-container" id="resultContainer">
                 <div class="result-header">
                     <div class="result-info">
@@ -485,7 +529,7 @@
 
             <h2 style="margin-top: 30px;">转换说明</h2>
             <p><strong>Word 文档：</strong>保留标题层级、段落结构、列表格式，转换为 Markdown 时保留基本样式。</p>
-            <p><strong>PDF 文档：</strong>提取文本内容，保留基本段落结构。扫描版 PDF 可能无法提取文本。</p>
+            <p><strong>PDF 文档：</strong>自动检测文本型或扫描版 PDF。扫描版 PDF 会启用 OCR 识别（支持中英文），提取图片中的文字。</p>
             <p><strong>Excel 表格：</strong>转换为 Markdown 表格或 JSON 数组，保留数据和表头。</p>
             <p><strong>PPT 演示文稿：</strong>提取每页幻灯片的文本内容，按页面组织输出。</p>
         </div>
@@ -670,13 +714,13 @@
             let content = {
                 title: file.name,
                 type: 'pdf',
-                pages: []
+                pages: [],
+                isScanned: false
             };
             
+            // 先尝试提取文本
+            let hasText = false;
             for (let i = 1; i <= pdf.numPages; i++) {
-                progressFill.style.width = ((i / pdf.numPages) * 100) + '%';
-                progressText.textContent = `正在解析第 ${i}/${pdf.numPages} 页...`;
-                
                 const page = await pdf.getPage(i);
                 const textContent = await page.getTextContent();
                 
@@ -691,10 +735,73 @@
                     lastY = item.transform[5];
                 });
                 
+                if (pageText.trim().length > 50) {
+                    hasText = true;
+                }
+                
                 content.pages.push({
                     pageNumber: i,
                     text: pageText.trim()
                 });
+            }
+            
+            // 如果没有提取到足够文本，使用 OCR
+            if (!hasText) {
+                content.isScanned = true;
+                showToast('检测到扫描版 PDF，正在启用 OCR 识别...', 'warning');
+                
+                // 显示 OCR 状态
+                const ocrStatus = document.getElementById('ocrStatus');
+                const ocrProgressFill = document.getElementById('ocrProgressFill');
+                const ocrInfo = document.getElementById('ocrInfo');
+                ocrStatus.classList.add('active');
+                
+                // 初始化 OCR
+                const worker = await Tesseract.createWorker('chi_sim+eng', 1, {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            const percent = Math.round(m.progress * 100);
+                            ocrProgressFill.style.width = percent + '%';
+                            ocrInfo.textContent = `正在识别文本... ${percent}%`;
+                        } else if (m.status === 'loading language traineddata') {
+                            ocrInfo.textContent = '正在加载中文语言包...';
+                        } else if (m.status === 'initializing api') {
+                            ocrInfo.textContent = '正在初始化 OCR 引擎...';
+                        }
+                    }
+                });
+                
+                // 对每一页进行 OCR
+                for (let i = 0; i < content.pages.length; i++) {
+                    ocrInfo.textContent = `正在处理第 ${i + 1}/${pdf.numPages} 页...`;
+                    ocrProgressFill.style.width = ((i + 1) / pdf.numPages * 100) + '%';
+                    
+                    const page = await pdf.getPage(i + 1);
+                    const scale = 2; // 提高分辨率以获得更好的 OCR 效果
+                    const viewport = page.getViewport({ scale: scale });
+                    
+                    // 创建 canvas 渲染页面
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    
+                    await page.render({
+                        canvasContext: context,
+                        viewport: viewport
+                    }).promise;
+                    
+                    // 进行 OCR
+                    const { data: { text } } = await worker.recognize(canvas);
+                    content.pages[i].text = text.trim();
+                }
+                
+                // 终止 worker
+                await worker.terminate();
+                
+                // 隐藏 OCR 状态
+                ocrStatus.classList.remove('active');
+                showToast('OCR 识别完成！', 'success');
             }
             
             return content;
@@ -796,20 +903,179 @@
             }
         }
 
+        // 转换 HTML 表格为 Markdown 表格（支持合并单元格）
+        function convertHtmlTables(html) {
+            let result = '';
+            
+            // 使用 DOMParser 解析 HTML
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const tables = doc.querySelectorAll('table');
+            
+            tables.forEach((table) => {
+                const rows = table.querySelectorAll('tr');
+                const matrix = []; // 表格矩阵，用于处理合并单元格
+                
+                // 构建表格矩阵
+                rows.forEach((row, rowIndex) => {
+                    if (!matrix[rowIndex]) matrix[rowIndex] = [];
+                    
+                    const cells = row.querySelectorAll('td, th');
+                    let colIndex = 0;
+                    
+                    cells.forEach((cell) => {
+                        // 跳过已被占用的单元格
+                        while (matrix[rowIndex][colIndex]) {
+                            colIndex++;
+                        }
+                        
+                        // 获取单元格文本
+                        let cellText = cell.textContent.trim();
+                        cellText = cellText.replace(/\n+/g, ' ');
+                        cellText = cellText.replace(/\|/g, '\|');
+                        
+                        // 获取合并信息
+                        const rowspan = parseInt(cell.getAttribute('rowspan')) || 1;
+                        const colspan = parseInt(cell.getAttribute('colspan')) || 1;
+                        
+                        // 填充矩阵
+                        for (let i = 0; i < rowspan; i++) {
+                            for (let j = 0; j < colspan; j++) {
+                                if (!matrix[rowIndex + i]) matrix[rowIndex + i] = [];
+                                matrix[rowIndex + i][colIndex + j] = cellText;
+                            }
+                        }
+                        
+                        colIndex += colspan;
+                    });
+                });
+                
+                // 转换为 Markdown 表格
+                if (matrix.length > 0) {
+                    // 计算最大列数
+                    const maxCols = Math.max(...matrix.map(row => row.length));
+                    
+                    // 表头
+                    if (matrix[0]) {
+                        while (matrix[0].length < maxCols) matrix[0].push('');
+                        result += '| ' + matrix[0].join(' | ') + ' |\n';
+                        result += '| ' + matrix[0].map(() => '---').join(' | ') + ' |\n';
+                    }
+                    
+                    // 数据行
+                    for (let i = 1; i < matrix.length; i++) {
+                        if (!matrix[i]) matrix[i] = [];
+                        while (matrix[i].length < maxCols) matrix[i].push('');
+                        result += '| ' + matrix[i].join(' | ') + ' |\n';
+                    }
+                    result += '\n';
+                }
+            });
+            
+            return result;
+                    
+                    if (cells.length > 0) {
+                        rows.push(cells);
+                    }
+                }
+                
+                // 转换为 Markdown 表格
+                if (rows.length > 0) {
+                    // 第一行作为表头
+                    const headerRow = rows[0];
+                    result += '| ' + headerRow.join(' | ') + ' |\n';
+                    result += '| ' + headerRow.map(() => '---').join(' | ') + ' |\n';
+                    
+                    // 数据行
+                    for (let i = 1; i < rows.length; i++) {
+                        const row = rows[i];
+                        // 确保列数一致
+                        while (row.length < headerRow.length) {
+                            row.push('');
+                        }
+                        result += '| ' + row.slice(0, headerRow.length).join(' | ') + ' |\n';
+                    }
+                    result += '\n';
+                }
+            }
+            
+            return result;
+        }
+
+        // 转换 HTML 表格为纯文本
+        function convertHtmlTablesToTxt(html) {
+            let result = '';
+            
+            // 匹配所有表格
+            const tableRegex = /<table[^>]*>([\s\S]*?)<\/table>/gi;
+            let match;
+            
+            while ((match = tableRegex.exec(html)) !== null) {
+                const tableContent = match[1];
+                
+                // 提取所有行
+                const rows = [];
+                const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+                let rowMatch;
+                
+                while ((rowMatch = rowRegex.exec(tableContent)) !== null) {
+                    const rowContent = rowMatch[1];
+                    const cells = [];
+                    
+                    // 提取单元格
+                    const cellRegex = /<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi;
+                    let cellMatch;
+                    
+                    while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+                        let cellText = cellMatch[1];
+                        cellText = cellText.replace(/<br\s*\/?>/gi, ' ');
+                        cellText = cellText.replace(/<[^>]+>/g, '');
+                        cellText = cellText.trim();
+                        cells.push(cellText);
+                    }
+                    
+                    if (cells.length > 0) {
+                        rows.push(cells);
+                    }
+                }
+                
+                // 转换为纯文本表格
+                if (rows.length > 0) {
+                    rows.forEach(row => {
+                        result += row.join('\t') + '\n';
+                    });
+                    result += '\n';
+                }
+            }
+            
+            return result;
+        }
+
         // 转换为 Markdown
         function toMarkdown(content) {
             let markdown = '';
             
             if (content.type === 'pdf') {
                 markdown += `# ${content.title}\n\n`;
+                if (content.isScanned) {
+                    markdown += `> 📝 此 PDF 为扫描版，已通过 OCR 识别提取文字\n\n`;
+                }
                 content.pages.forEach(page => {
                     markdown += `## 第 ${page.pageNumber} 页\n\n`;
                     markdown += page.text + '\n\n';
                 });
             } else if (content.type === 'word') {
                 markdown += `# ${content.title}\n\n`;
-                // 简单的 HTML 到 Markdown 转换
+                // HTML 到 Markdown 转换（支持表格）
                 let html = content.html;
+                
+                // 先处理表格
+                markdown += convertHtmlTables(html);
+                
+                // 移除已处理的表格
+                html = html.replace(/<table[^>]*>[\s\S]*?<\/table>/gi, '');
+                
+                // 处理其他元素
                 html = html.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n');
                 html = html.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n');
                 html = html.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n');
@@ -856,6 +1122,9 @@
             
             if (content.type === 'pdf') {
                 txt += `${content.title}\n\n`;
+                if (content.isScanned) {
+                    txt += `[此 PDF 为扫描版，已通过 OCR 识别提取文字]\n\n`;
+                }
                 content.pages.forEach(page => {
                     txt += `--- 第 ${page.pageNumber} 页 ---\n\n`;
                     txt += page.text + '\n\n';
@@ -863,6 +1132,14 @@
             } else if (content.type === 'word') {
                 txt += `${content.title}\n\n`;
                 let html = content.html;
+                
+                // 处理表格
+                txt += convertHtmlTablesToTxt(html);
+                
+                // 移除已处理的表格
+                html = html.replace(/<table[^>]*>[\s\S]*?<\/table>/gi, '');
+                
+                // 处理其他元素
                 html = html.replace(/<br\s*\/?>/gi, '\n');
                 html = html.replace(/<\/p>/gi, '\n\n');
                 html = html.replace(/<\/h[1-6]>/gi, '\n\n');
